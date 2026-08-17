@@ -1,0 +1,101 @@
+name: Build APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rebuild keystore from secret
+        run: |
+          echo "${{ secrets.REPAIR_KEYSTORE }}" | base64 -d > signing.keystore
+          echo "keystore bytes: $(stat -c%s signing.keystore)"
+
+      - name: Build CloudAPK request
+        run: |
+          python3 - <<'EOF'
+          import json, base64
+          ks = base64.b64encode(open("signing.keystore", "rb").read()).decode()
+          base = "https://matvren.github.io"
+          req = {
+            "pwaUrl": base + "/",
+            "webManifestUrl": base + "/manifest.json",
+            "host": base,
+            "startUrl": "/",
+            "name": "CyTECH",
+            "launcherName": "CyTECH",
+            "packageId": "com.matvren.repairshop",
+            "appVersion": "1.0.0",
+            "appVersionCode": 2,
+            "display": "standalone",
+            "fallbackType": "webview",
+            "backgroundColor": "#ffffff",
+            "themeColor": "#0f0f0f",
+            "navigationColor": "#ffffff",
+            "splashScreenFadeOutDuration": 300,
+            "iconUrl": base + "/icon-512.png",
+            "maskableIconUrl": base + "/icon-maskable-512.png",
+            "enableNotifications": False,
+            "enableSiteSettingsShortcut": False,
+            "includeSourceCode": False,
+            "signingMode": "mine",
+            "signing": {
+              "alias": "repair",
+              "keyPassword": "${{ secrets.REPAIR_KEYSTORE_PASS }}",
+              "storePassword": "${{ secrets.REPAIR_KEYSTORE_PASS }}",
+              "fullName": "Repair Shop",
+              "organization": "Repair Shop",
+              "organizationalUnit": "Dev",
+              "countryCode": "US",
+              "file": "data:application/octet-stream;base64," + ks
+            }
+          }
+          with open("request.json", "w") as f:
+              f.write(json.dumps(req))
+          print("request.json written")
+          EOF
+
+      - name: Generate APK via PWABuilder CloudAPK
+        run: |
+          for i in 1 2 3 4 5; do
+            curl -sSL -X POST https://pwabuilder-cloudapk.azurewebsites.net/generateAppPackage \
+              -H "Content-Type: application/json" \
+              --data-binary @request.json \
+              -o package.zip
+            if head -c2 package.zip | grep -q "PK"; then
+              echo "SUCCESS on attempt $i ($(stat -c%s package.zip) bytes)"
+              break
+            fi
+            echo "attempt $i returned: $(cat package.zip)"
+            sleep 15
+          done
+          if ! head -c2 package.zip | grep -q "PK"; then
+            echo "CloudAPK failed: $(cat package.zip)"
+            exit 1
+          fi
+          file package.zip
+
+      - name: Extract package
+        run: |
+          mkdir -p out
+          python3 - <<'EOF'
+          import zipfile, os
+          with zipfile.ZipFile("package.zip") as z:
+              z.extractall("out")
+          for root, dirs, files in os.walk("out"):
+              for f in files:
+                  p = os.path.join(root, f)
+                  print(f"{p} ({os.path.getsize(p)} bytes)")
+          EOF
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk-package
+          path: |
+            package.zip
+            out/
