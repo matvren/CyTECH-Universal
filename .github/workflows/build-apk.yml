@@ -2,8 +2,19 @@ name: Build APK
 
 on:
   workflow_dispatch:
-  push:
-    branches: [ main ]
+    inputs:
+      appName:
+        description: 'App name for the APK (customer branding)'
+        required: false
+        default: 'CyTECH'
+      packageId:
+        description: 'Android package id (unique per customer)'
+        required: false
+        default: 'com.cytech.universal'
+      baseUrl:
+        description: 'Deployed site URL for the customer (no trailing slash)'
+        required: false
+        default: 'https://example.com/shop'
 
 jobs:
   build-apk:
@@ -17,19 +28,24 @@ jobs:
           echo "keystore bytes: $(stat -c%s signing.keystore)"
 
       - name: Build CloudAPK request
+        env:
+          APP_NAME: ${{ github.event.inputs.appName }}
+          PKG_ID: ${{ github.event.inputs.packageId }}
+          BASE_URL: ${{ github.event.inputs.baseUrl }}
         run: |
           python3 - <<'EOF'
-          import json, base64
+          import json, base64, os
           ks = base64.b64encode(open("signing.keystore", "rb").read()).decode()
-          base = "https://matvren.github.io"
+          base = os.environ["BASE_URL"].rstrip("/")
+          name = os.environ["APP_NAME"]
           req = {
             "pwaUrl": base + "/",
             "webManifestUrl": base + "/manifest.json",
             "host": base,
             "startUrl": "/",
-            "name": "CyTECH",
-            "launcherName": "CyTECH",
-            "packageId": "com.matvren.repairshop",
+            "name": name,
+            "launcherName": name,
+            "packageId": os.environ["PKG_ID"],
             "appVersion": "1.0.0",
             "appVersionCode": 2,
             "display": "standalone",
@@ -48,8 +64,8 @@ jobs:
               "alias": "repair",
               "keyPassword": "${{ secrets.REPAIR_KEYSTORE_PASS }}",
               "storePassword": "${{ secrets.REPAIR_KEYSTORE_PASS }}",
-              "fullName": "Repair Shop",
-              "organization": "Repair Shop",
+              "fullName": name,
+              "organization": name,
               "organizationalUnit": "Dev",
               "countryCode": "US",
               "file": "data:application/octet-stream;base64," + ks
