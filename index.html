@@ -149,6 +149,8 @@ a{color:inherit}
 .cal-amt{font-size:9.5px;font-weight:800;color:var(--good);position:absolute;bottom:4px;left:5px;white-space:nowrap;overflow:hidden;max-width:calc(100% - 10px)}
 .cal-amt.neg{color:var(--bad)}
 .cal-dot{position:absolute;top:5px;right:6px;width:6px;height:6px;border-radius:50%;background:var(--accent)}
+.cal-dots{position:absolute;top:6px;right:6px;display:flex;gap:3px}
+.cal-dots span{width:6px;height:6px;border-radius:50%;display:block}
 .cal-day.today{border-color:var(--accent)}
 .cal-sel-title{font-size:14px;font-weight:800;margin:18px 0 2px}
 .act-row{display:flex;align-items:center;gap:8px;padding:8px 2px;border-bottom:1px dashed var(--line);font-size:12.5px}
@@ -2254,14 +2256,15 @@ function renderCalendar(c){
       '<button class="btn btn-sm" onclick="calShift(1)">' + icon('right', 14) + '</button>' +
     '</div>' +
     '<div class="cal-grid">';
-  for(var i = 0; i < offset; i++) html += '<div class="cal-cell empty"></div>';
+  html += ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(function(dw){ return '<div class="cal-dow">' + dw + '</div>'; }).join('');
+  for(var i = 0; i < offset; i++) html += '<div class="cal-day blank"></div>';
   var today = calToday();
   for(var d = 1; d <= daysInMonth; d++){
     var ds = CAL.y + '-' + String(CAL.m + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
     var dayTot = monthEntries.filter(function(e){ return e.date === ds; }).reduce(function(s, e){ return s + e.amount; }, 0);
     var isToday = ds === today;
-    html += '<div class="cal-cell' + (ds === CAL.day ? ' sel' : '') + '" onclick="calSelectDay(\'' + ds + '\')">' +
-      '<div class="cal-num' + (isToday ? ' today' : '') + '">' + d + '</div>' +
+    html += '<div class="cal-day' + (ds === CAL.day ? ' sel' : '') + (isToday ? ' today' : '') + '" onclick="calSelectDay(\'' + ds + '\')">' +
+      '<div class="cal-num">' + d + '</div>' +
       (dots[ds] ? '<div class="cal-dots">' + dots[ds].slice(0, 3).map(function(e){
         var col = e.mod ? (modByKey(e.mod) ? modByKey(e.mod).color : '#0f0f0f') : '#0f0f0f';
         return '<span style="background:' + col + '"></span>';
